@@ -17,7 +17,7 @@ public:
 		std::string integer_part, non_repeating_fraction_part, repeating_fraction_part;
 
 		constexpr std::string to_string() const;
-		static constexpr repeating_decimal from_string(const std::string_view &sv);
+		static constexpr repeating_decimal from_string(const std::string_view &sv, base b = base::auto_detect);
 	};
 	static constexpr std::optional<big_rat> from_repeating_decimal(const repeating_decimal &rd) { return from_repeating_decimal_impl(rd); }
 	// constructors
@@ -31,7 +31,7 @@ public:
 	template<std::floating_point T>
 	requires(std::numeric_limits<T>::is_iec559 && (std::is_same_v<T, float> || std::is_same_v<T, double>))
 	constexpr big_rat(T val) : big_rat(std::isnan(val) || std::isinf(val) ? big_rat(0) : from_floating_point(val)) {}
-	~big_rat() = default;
+	constexpr ~big_rat() noexcept = default;
 	// assignments
 	constexpr big_rat &operator = (const big_rat &) = default;
 	constexpr big_rat &operator = (big_rat &&) noexcept = default;
@@ -199,8 +199,8 @@ private:
 };
 
 namespace big_rat_literals {
-	constexpr big_rat operator ""_br (unsigned long long int x) { return big_rat(x); }
-	constexpr big_rat operator ""_br (long double x) { return big_rat(double(x)); }
+	constexpr big_rat operator ""_br (unsigned long long int x) { return { x }; }
+	constexpr big_rat operator ""_br (long double x) { return { double(x) }; }
 	constexpr big_rat operator ""_br (const char *s, std::size_t len) { return big_rat::from_string({ s, len }).value(); }
 }
 
@@ -213,8 +213,9 @@ constexpr std::string big_rat::repeating_decimal::to_string() const {
 	return ret;
 }
 
-constexpr big_rat::repeating_decimal big_rat::repeating_decimal::from_string(const std::string_view &sv) {
+constexpr big_rat::repeating_decimal big_rat::repeating_decimal::from_string(const std::string_view &sv, base b) {
 	repeating_decimal ret;
+	ret.b = b;
 	if (auto dot_p = sv.find('.'); dot_p != std::string::npos) {
 		ret.integer_part = sv.substr(0, dot_p);
 		if (dot_p == sv.size() - 1) return ret;

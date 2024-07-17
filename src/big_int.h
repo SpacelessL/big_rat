@@ -29,11 +29,6 @@
 #endif
 #endif
 
-#ifndef __has_builtin
-#define BIG_INT_ADD_HAS_BUILTIN
-#define __has_builtin(x) 0
-#endif
-
 #ifdef _MSC_VER
 #define BIG_INT_FORCE_INLINE __forceinline
 #elif defined(__clang__) || defined(__GNUC__)
@@ -76,7 +71,7 @@ public:
 		uppercase = 1 << 1,
 		showpos = 1 << 2,
 	};
-	static constexpr std::optional<big_int> from_string(std::string_view sv, base *b_output = nullptr) { base b = base::auto_detect; auto ret = from_string_impl(sv.data(), sv.size(), &b); if (b_output) *b_output = b; return ret; }
+	static constexpr std::optional<big_int> from_string(std::string_view sv, base *b_output = nullptr);
 	static constexpr std::optional<big_int> from_string(std::string_view sv, base b) { return from_string_impl(sv.data(), sv.length(), &b); }
 	constexpr std::string to_string(base b = base::decimal, to_string_option option = to_string_option::showbase) const { return to_string_impl(uint32_t(b), option); }
 	// constructors
@@ -90,10 +85,12 @@ public:
 	constexpr big_int(uint64_t num) : data_({ num }) {}
 	constexpr big_int(int64_t num) : big_int(num >= 0 ? uint64_t(num) : (uint64_t(~num) + 1)) { sign_ = num < 0; }
 	constexpr big_int(std::vector<uint64_t> d, bool sign = false) noexcept : sign_(sign), data_(std::move(d)) { trim_leading_zeros(); if (is_zero(data_)) sign_ = false; }
+	template<size_t E>
+	constexpr big_int(std::span<const uint64_t, E> d, bool sign = false) : big_int(std::vector(d.begin(), d.end()), sign) {}
 	explicit constexpr big_int(std::string_view sv) : big_int(from_string(sv).value()) {}
-	constexpr ~big_int() = default;
+	constexpr ~big_int() noexcept = default;
 	// assignments
-	constexpr big_int &operator = (const big_int &) = default;
+	constexpr big_int &operator = (const big_int &rhs) = default;
 	constexpr big_int &operator = (big_int &&) noexcept = default;
 	// unary operators, also see sign-related functions
 	constexpr const big_int &operator + () const & { return *this; }
@@ -120,6 +117,11 @@ public:
 	// bitwise binary operators
 	constexpr big_int operator ~ () const & { return ~big_int(*this); }
 	constexpr big_int operator ~ () && { bitwise_not(); return std::move(*this); }
+#ifdef __RESHARPER__
+	friend constexpr big_int operator & (big_int, big_int) noexcept { return {}; } constexpr big_int &operator &= (const big_int &) { return *this; }
+	friend constexpr big_int operator | (big_int, big_int) noexcept { return {}; } constexpr big_int &operator |= (const big_int &) { return *this; }
+	friend constexpr big_int operator ^ (big_int, big_int) noexcept { return {}; } constexpr big_int &operator ^= (const big_int &) { return *this; }
+#else
 #define BIG_INT_BITWISE_OPERATORS(op) \
 	friend constexpr big_int operator op (const big_int &lhs, const big_int &rhs) { return std::move(lhs.data_.size() >= rhs.data_.size() ? big_int(lhs) op= rhs : big_int(rhs) op= lhs); } \
 	friend constexpr big_int operator op (const big_int &lhs, big_int &&rhs) { return std::move(rhs op= lhs); } \
@@ -130,6 +132,7 @@ public:
 	BIG_INT_BITWISE_OPERATORS(|)
 	BIG_INT_BITWISE_OPERATORS(^)
 #undef BIG_INT_BITWISE_OPERATORS
+#endif
 	constexpr big_int operator << (uint64_t rhs) const & { return copy_with_reserve(data_.size() + bits_to_digits(rhs)) << rhs; }
 	constexpr big_int operator << (uint64_t rhs) && { return std::move(*this <<= rhs); }
 	constexpr big_int operator >> (uint64_t rhs) const & { return big_int(*this) >> rhs; }
@@ -140,7 +143,7 @@ public:
 	constexpr big_int &operator -= (const big_int &rhs) { add_minus_impl(rhs, true); return *this; }
 	constexpr big_int &operator -= (big_int &&rhs) { return data_.capacity() >= rhs.data_.capacity() ? *this -= rhs : *this = std::move(rhs -= *this).negation(); }
 	constexpr big_int &operator *= (const big_int &rhs);
-	constexpr big_int &operator *= (big_int &&rhs) { return data_.capacity() >= rhs.data_.capacity() ? *this *= rhs : rhs *= *this; }
+	constexpr big_int &operator *= (big_int &&rhs) { return data_.capacity() >= rhs.data_.capacity() ? *this *= rhs : *this = std::move(rhs *= *this); }
 	constexpr big_int &operator /= (const big_int &rhs) { return *this = std::move(*this) / rhs; }
 	constexpr big_int &operator %= (const big_int &rhs) { return *this = std::move(*this) % rhs; }
 	constexpr big_int &operator <<= (uint64_t shift) { left_shift_impl(&data_, shift); return *this; }
@@ -207,7 +210,7 @@ public:
 	static big_int random(uint64_t bits) { thread_local std::mt19937_64 rng(std::random_device{}()); return random(bits, rng); }
 
 	friend auto &operator >> (std::istream &is, big_int &x) { std::string s; is >> s; if (auto v = from_string(s); v) x = std::move(v.value()); return is; }
-	friend auto &operator << (std::ostream &os, const big_int &x) { auto [base, options] = get_ios_base_and_options(os); return os << x.to_string(base, options); }
+	friend auto &operator << (std::ostream &os, const big_int &x) { auto [b, o] = get_ios_base_and_options(os); return os << x.to_string(b, o); }
 private:
 	static constexpr uint64_t B = std::numeric_limits<uint64_t>::max();
 	static constexpr BIG_INT_FORCE_INLINE bool is_zero(const std::vector<uint64_t> &data) noexcept { return data.size() == 1 && !data.front(); }
@@ -215,7 +218,7 @@ private:
 	constexpr big_int copy_with_reserve(uint64_t size) const {
 		std::vector<uint64_t> data(size);
 		data = data_;
-		return big_int(std::move(data), sign_);
+		return { std::move(data), sign_ };
 	}
 	constexpr big_int copy_for_add_minus(const big_int &rhs) const { return copy_with_reserve(std::max(data_.size(), rhs.data_.size()) + 1); }
 	static std::pair<base, to_string_option> get_ios_base_and_options(const std::ios_base &ios) noexcept {
@@ -244,34 +247,32 @@ private:
 
 	static constexpr void add_minus_impl(std::vector<uint64_t> *lhs, bool *lhs_sign, const std::vector<uint64_t> &rhs, bool rhs_sign) {
 		uint64_t n = lhs->size(), m = rhs.size();
+		auto l = [&] { return std::span(lhs->data(), n); };
+		auto r = [&] { return std::span(rhs.data(), m); };
 		if (*lhs_sign == rhs_sign) {
 			lhs->resize(std::max(n, m) + 1);
-			if (n >= m) add_minus_impl<false>(*lhs, n, rhs, m, lhs);
-			else add_minus_impl<false>(rhs, m, *lhs, n, lhs);
+			if (n >= m) add_minus_impl<false>(l(), r(), *lhs);
+			else add_minus_impl<false>(r(), l(), *lhs);
 		}
 		else if (auto order = compare_data(*lhs, rhs); order == std::strong_ordering::equal)
 			*lhs = { 0 }, *lhs_sign = false;
 		else if (order == std::strong_ordering::greater)
-			add_minus_impl<true>(*lhs, n, rhs, m, lhs);
+			add_minus_impl<true>(l(), r(), *lhs);
 		else
-			lhs->resize(m), add_minus_impl<true>(rhs, m, *lhs, n, lhs), *lhs_sign = rhs_sign;
+			lhs->resize(m), add_minus_impl<true>(r(), l(), *lhs), *lhs_sign = rhs_sign;
 		trim_leading_zeros(lhs);
 	}
 	template<bool minus>
-	static constexpr void add_minus_impl(const std::vector<uint64_t> &lhs, uint64_t n, const std::vector<uint64_t> &rhs, uint64_t m, std::vector<uint64_t> *output) noexcept {
-		add_minus_impl<minus>(lhs.data(), n, rhs.data(), m, output->data(), output->size());
-	}
-	template<bool minus>
-	static constexpr void add_minus_impl(const uint64_t *l, uint64_t n, const uint64_t *r, uint64_t m, uint64_t *o, uint64_t o_size) noexcept {
+	static constexpr void add_minus_impl(std::span<const uint64_t> l, std::span<const uint64_t> r, std::span<uint64_t> o) noexcept {
 #define BIG_INT_OVERLOADED(func) [](auto &&...args) noexcept { func(std::forward<decltype(args)>(args)...); }
-		if constexpr (!minus) add_minus_impl(l, n, r, m, o, o_size, BIG_INT_OVERLOADED(detail::add));
-		else add_minus_impl(l, n, r, m, o, o_size, BIG_INT_OVERLOADED(detail::minus));
+		if constexpr (!minus) add_minus_impl(l, r, o, BIG_INT_OVERLOADED(detail::add));
+		else add_minus_impl(l, r, o, BIG_INT_OVERLOADED(detail::minus));
 #undef BIG_INT_OVERLOADED
 	}
 	template<typename Func>
-	static constexpr void add_minus_impl(const uint64_t *l, uint64_t n, const uint64_t *r, uint64_t m, uint64_t *o, uint64_t o_size, Func &&func) noexcept {
+	static constexpr void add_minus_impl(std::span<const uint64_t> l, std::span<const uint64_t> r, std::span<uint64_t> o, Func &&func) noexcept {
 		uint64_t carry = 0;
-		for (uint64_t i = 0; i < m; i++) {
+		for (uint64_t i = 0; i < r.size(); i++) {
 			uint64_t overflow = 0;
 			uint64_t x = l[i];
 			func(&x, r[i], &overflow);
@@ -279,14 +280,14 @@ private:
 			o[i] = x;
 			carry = overflow;
 		}
-		auto j = m;
-		while (carry && j < o_size) {
-			uint64_t overflow = 0, x = j < n ? l[j] : 0;
+		auto j = r.size();
+		while (carry && j < o.size()) {
+			uint64_t overflow = 0, x = j < l.size() ? l[j] : 0;
 			func(&x, carry, &overflow);
 			carry = overflow;
 			o[j++] = x;
 		}
-		if (auto min_size = std::min(n, o_size); j < min_size) std::ranges::copy_n(l + j, min_size - j, o + j);
+		if (auto min_size = std::min(l.size(), o.size()); j < min_size) std::ranges::copy_n(l.begin() + j, min_size - j, o.begin() + j);
 	}
 
 	static constexpr std::vector<uint64_t> multiply_impl(const std::vector<uint64_t> &lhs, const std::vector<uint64_t> &rhs) {
@@ -378,9 +379,10 @@ private:
 			while (!r_carry && test()) --q, detail::add(&r, divisor.back(), &r_carry);
 			multiply_1_impl(&tmp, divisor, q);
 			auto before = dividend[j + n];
-			add_minus_impl<true>(dividend.data() + j, n + 1, tmp.data(), tmp.size(), dividend.data() + j, n + 1);
+			auto dividend_span = std::span(dividend.data() + j, n + 1);
+			add_minus_impl<true>(dividend_span, tmp, dividend_span);
 			ret[j] = q;
-			if (before < dividend[j + n]) --ret[j], add_minus_impl<false>(dividend.data() + j, n + 1, divisor.data(), n, dividend.data() + j, n + 1);
+			if (before < dividend[j + n]) --ret[j], add_minus_impl<false>(dividend_span, divisor, dividend_span);
 		}
 		if (output_remainder) {
 			*output_remainder = std::move(dividend);
@@ -503,9 +505,28 @@ private:
 		ret.sign_ = sign;
 		return ret;
 	}
+
+	static constexpr int FastBaseTenDigits(uint64_t x) {
+		constexpr auto log2_to_log10 = []() constexpr {
+			std::array<int, 64> ret = { 1 };
+			for (auto x = 2ull, i = 1ull; i < 64; ++i, x *= 2)
+				for (auto t = x - 1; t; t /= 10)
+					++ret[i];
+			return ret;
+		}();
+		constexpr auto exp_10 = []() constexpr {
+			std::array<uint64_t, 20> ret = { 1 };
+			for (int i = 1; i < 20; i++) ret[i] = ret[i - 1] * 10;
+			return ret;
+		}();
+		int log2 = 63 - std::countl_zero(x);
+		int log10 = log2_to_log10[log2];
+		return log10 + (x >= exp_10[log10]);
+	}
+
 	constexpr std::string to_string_impl(uint32_t b, to_string_option option) const {
 		auto has_option = [&](to_string_option flag) { return (int(option) & int(flag)) == int(flag); };
-		auto num_to_char = [&](int num) -> char {
+		auto num_to_char = [&](auto num) -> char {
 			if (0 <= num && num <= 9) return num + '0';
 			if (10 <= num && num < b) return num - 10 + (has_option(to_string_option::uppercase) ? 'A' : 'a');
 			return 0;
@@ -541,8 +562,8 @@ private:
 		while (r) {
 			big_int cur;
 			r.data_ = divide_impl(std::move(r.data_), d.data_, &cur.data_);
-			std::string num = std::to_string(uint64_t(cur));
-			num = std::string(sc_bunch_digits - num.size(), '0') + num;
+			int digits = FastBaseTenDigits(int64_t(cur));
+			std::string num = std::string(sc_bunch_digits - digits, '0') + std::to_string(uint64_t(cur));
 			std::ranges::reverse(num);
 			ret += num;
 		}
@@ -569,6 +590,13 @@ private:
 	bool sign_ = false;
 	std::vector<uint64_t> data_;
 };
+
+constexpr std::optional<big_int> big_int::from_string(std::string_view sv, base* b_output) {
+	base b = base::auto_detect;
+	auto ret = from_string_impl(sv.data(), sv.size(), &b);
+	if (b_output) *b_output = b;
+	return ret;
+}
 
 constexpr big_int &big_int::operator *= (const big_int &rhs) {
 	if (data_.capacity() >= data_.size() + rhs.data_.size() && *this && rhs) {
@@ -712,11 +740,6 @@ static constexpr BIG_INT_FORCE_INLINE uint64_t udiv128(uint64_t high_dividend, u
 }
 
 }
-
-#ifdef BIG_INT_ADD_HAS_BUILTIN
-#undef BIG_INT_ADD_HAS_BUILTIN
-#undef __has_builtin
-#endif
 
 #ifdef BIG_INT_HAVE_INTRINSIC_INT128
 #undef BIG_INT_HAVE_INTRINSIC_INT128

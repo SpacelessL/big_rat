@@ -9,13 +9,13 @@ using namespace big_rat_literals;
 
 static big_rat calculate_pi() {
 	big_rat ret = 0;
-	for (uint64_t k = 0; k < 3; ++k) {
+	/*for (uint64_t k = 0; k < 3; ++k) {
 		big_rat x = big_int::factorial(6 * k) *(13591409 + 545140134 * k)
 			/ (big_int::factorial(3 * k) *big_int::factorial(k).power(3) *big_rat((640320_bi).power(6 * k + 3)).sqrt());
 		if (k % 2) ret -= x;
 		else ret += x;
 	}
-	ret *= 12;
+	ret *= 12;*/
 	return std::move(ret).inverse();
 }
 
@@ -33,7 +33,7 @@ int main(int argc, char **argv) {
 	std::cout << pi << std::endl;
 	std::cout << double(pi) << std::endl;
 	std::cout << big_int::factorial(100) << std::endl;
-	std::cout << big_rat(2).sqrt() << std::endl;
+	//std::cout << big_rat(2).sqrt() << std::endl;
 	benchmark();
 	return 0;
 }

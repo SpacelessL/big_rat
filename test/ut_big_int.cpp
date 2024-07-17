@@ -32,10 +32,32 @@ static void unit_test() {
 			expect(eq((b + d) / a, a.power(12)));
 			expect(eq((b + d) % a, d));
 			expect(eq((2_bi).power(1677215), (1_bi << 1677215)));
+
+			expect(eq(a + a, a * 2));
+			expect(eq(b + b, b * 2));
+			expect(eq(c + c, c * 2));
+			expect(eq(d + d, d * 2));
+
+			expect(eq(a + a, a << 1));
+			expect(eq(b + b, b << 1));
+			expect(eq(c + c, c << 1));
+			expect(eq(d + d, d << 1));
+
+			expect(eq(a - a, 0));
+			expect(eq(b - b, 0));
+			expect(eq(c - c, 0));
+			expect(eq(d - d, 0));
+
 			expect(eq(a / a, 1));
 			expect(eq(b / b, 1));
 			expect(eq(c / c, 1));
 			expect(eq(d / d, 1));
+
+			expect(eq(a % a, 0));
+			expect(eq(b % b, 0));
+			expect(eq(c % c, 0));
+			expect(eq(d % d, 0));
+
 			auto test_self_op = [](big_int x) {
 				big_int y = x;
 				expect(eq(y + y, x + x));
