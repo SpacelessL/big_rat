@@ -24,7 +24,7 @@ public:
 	constexpr big_rat() : big_rat(0) {}
 	constexpr big_rat(const big_rat &) = default;
 	constexpr big_rat(big_rat &&) noexcept = default;
-	constexpr big_rat(big_int num) : big_rat(std::move(num), 1, {}) {}
+	explicit constexpr big_rat(big_int num) : big_rat(std::move(num), 1, {}) {}
 	constexpr big_rat(big_int num, big_int denom) : big_rat(std::move(num), std::move(denom), {}) { simplify(); }
 	template<std::integral T>
 	constexpr big_rat(T num) : big_rat(big_int(num)) {}
@@ -111,9 +111,9 @@ public:
 	[[nodiscard]] constexpr big_rat inverse() const & { return big_rat(*this).inverse(); }
 	[[nodiscard]] constexpr big_rat inverse() && noexcept { invert(); return std::move(*this); }
 	// arithmetic functions
-	//[[nodiscard]] constexpr big_int floor() const {  }
-	//[[nodiscard]] constexpr big_int ceil() const {  }
-	//[[nodiscard]] constexpr big_int round() const {  }
+	[[nodiscard]] constexpr big_int floor() const;
+	[[nodiscard]] constexpr big_int ceil() const;
+	[[nodiscard]] constexpr big_int round() const;
 	[[nodiscard]] constexpr big_int trunc() const { return numerator_ / denominator_; }
 	[[nodiscard]] constexpr big_rat power(int64_t n) const;
 	[[nodiscard]] constexpr big_rat limit_denominator(const big_int &max_denominator = 1000000) const;
@@ -260,6 +260,25 @@ constexpr big_rat big_rat::limit_denominator(const big_int &max_denominator) con
 	bound1.set_sign(sign());
 	bound2.set_sign(sign());
 	return (bound2 - *this).absolute() <= (bound1 - *this).absolute() ? bound2 : bound1;
+}
+
+constexpr big_int big_rat::floor() const {
+	big_int rem, quot = numerator_.divide_with_reminder(denominator_, &rem);
+	if (sign() && rem) --quot;
+	return quot;
+}
+
+constexpr big_int big_rat::ceil() const {
+	big_int rem, quot = numerator_.divide_with_reminder(denominator_, &rem);
+	if (!sign() && rem) ++quot;
+	return quot;
+}
+
+constexpr big_int big_rat::round() const {
+	big_int rem, quot = numerator_.divide_with_reminder(denominator_, &rem);
+	rem.absolutize();
+	if ((rem << 1) >= denominator_) { if (sign()) --quot; else ++quot; }
+	return quot;
 }
 
 }

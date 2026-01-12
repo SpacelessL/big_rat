@@ -79,6 +79,11 @@ static void unit_test() {
 			test_self_op(c);
 			test_self_op(d);
 		};
+		feature("pow") = [] {
+			int x = 1679616, y = 2985984, z = 4478976;
+			int g = big_int::gcd(x, big_int::gcd(y, z)).to<int>();
+			expect(eq(big_int(x).power(x / g) * big_int(y).power(y / g), big_int(z).power(z / g)));
+		};
 		feature("gcd") = [] {
 			auto a = "0x2cffffffffffffffffffffffffffffff4c000000000000000000000000000000b5"_bi;
 			auto b = "0x1ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff"_bi;
@@ -189,13 +194,6 @@ static void unit_test() {
 			std::ifstream fin("test_cases.txt");
 			std::string op;
 			while (std::getline(fin, op)) {
-				std::string at, bt, ct;
-				std::getline(fin, at);
-				std::getline(fin, bt);
-				std::getline(fin, ct);
-				big_int a = big_int::from_string(at).value();
-				big_int b = big_int::from_string(bt).value();
-				big_int c = big_int::from_string(ct).value();
 				auto calc = [&op](auto &&a, auto &&b) {
 					if (op == "ADD")
 						return std::forward<decltype(a)>(a) + std::forward<decltype(b)>(b);
@@ -222,20 +220,27 @@ static void unit_test() {
 						return std::forward<decltype(a)>(a) %= std::forward<decltype(b)>(b);
 					return big_int(0);
 				};
-				expect(eq(c, calc(a, b)));
-				expect(eq(c, calc(big_int(a), b)));
-				expect(eq(c, calc(a, big_int(b))));
-				expect(eq(c, calc(big_int(a), big_int(b))));
-				auto test_calc_eq = [&](auto &&a, auto &&b) {
+				auto test_calc_eq = [&](auto &&a, auto &&b, auto &&c) {
 					auto a_bk = a, b_bk = b;
 					expect(eq(c, calc_eq(std::forward<decltype(a)>(a), std::forward<decltype(b)>(b))));
 					a = a_bk;
 					b = b_bk;
 				};
-				test_calc_eq(a, b);
-				test_calc_eq(big_int(a), b);
-				test_calc_eq(a, big_int(b));
-				test_calc_eq(big_int(a), big_int(b));
+				std::string at, bt, ct;
+				std::getline(fin, at);
+				std::getline(fin, bt);
+				std::getline(fin, ct);
+				big_int a = big_int::from_string(at).value();
+				big_int b = big_int::from_string(bt).value();
+				big_int c = big_int::from_string(ct).value();
+				expect(eq(c, calc(a, b)));
+				expect(eq(c, calc(big_int(a), b)));
+				expect(eq(c, calc(a, big_int(b))));
+				expect(eq(c, calc(big_int(a), big_int(b))));
+				test_calc_eq(a, b, c);
+				test_calc_eq(big_int(a), b, c);
+				test_calc_eq(a, big_int(b), c);
+				test_calc_eq(big_int(a), big_int(b), c);
 			}
 		};
 	};

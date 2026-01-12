@@ -346,7 +346,7 @@ private:
 		}
 		uint64_t n = dividend.size();
 		*remainder = 0;
-		for (uint64_t i = n - 1; i < n; --i)
+		for (uint64_t i = n - 1; i < n; --i) // intended overflow
 			dividend[i] = detail::udiv128(*remainder, dividend[i], divisor, remainder);
 		trim_leading_zeros(&dividend);
 		return dividend;
@@ -368,7 +368,7 @@ private:
 		left_shift_impl(&divisor, shift);
 		std::vector<uint64_t> ret(m + 1), tmp;
 		tmp.reserve(n + 1);
-		for (auto j = m; j <= m; --j) {
+		for (auto j = m; j <= m; --j) { // intended overflow
 			uint64_t r = 0, r_carry = 0;
 			uint64_t q = detail::udiv128(dividend[j + n], dividend[j + n - 1], divisor.back(), &r);
 			auto test = [&] {
